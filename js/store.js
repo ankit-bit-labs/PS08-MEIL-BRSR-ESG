@@ -1565,21 +1565,56 @@ class AppStore {
   }
 
   addBusinessUnit(data) {
+    if (!data || !data.name || !data.name.trim()) {
+      return { error: true, message: "Business Unit Name is required." };
+    }
+    const cleanName = data.name.trim();
+    const subsidiaryId = data.subsidiaryId;
+    if (!subsidiaryId) {
+      return { error: true, message: "Associated Subsidiary is required." };
+    }
+
+    // Prevent duplicate business unit names within the same subsidiary (case-insensitive)
+    const existing = (this.state.businessUnits || []).find(b =>
+      b.subsidiaryId === subsidiaryId &&
+      b.name.trim().toLowerCase() === cleanName.toLowerCase()
+    );
+    if (existing) {
+      return {
+        error: true,
+        message: `A Business Unit named "${cleanName}" already exists for this subsidiary.`
+      };
+    }
+
     const id = `bu-${Date.now()}`;
+    const code = (data.code && data.code.trim()) ? data.code.trim() : `BU-${cleanName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase()}`;
+    const desc = data.description ? data.description.trim() : (data.activities ? data.activities.trim() : '');
+
     const newBU = {
       id,
-      subsidiaryId: data.subsidiaryId,
-      name: data.name || 'New Business Unit',
-      head: data.head || '',
-      activities: data.activities || '',
+      code,
+      subsidiaryId,
+      name: cleanName,
+      head: (data.head && data.head.trim()) ? data.head.trim() : 'Operational Incharge',
+      activities: desc || 'Operational unit reporting node',
+      description: desc,
       projectCount: 0,
       esgStatus: 'Draft',
-      status: 'Active'
+      status: data.status || 'Active'
     };
+
+    if (!this.state.businessUnits) this.state.businessUnits = [];
     this.state.businessUnits.push(newBU);
+
     // Update parent subsidiary buCount
-    const sub = this.state.subsidiaries.find(s => s.id === data.subsidiaryId);
-    if (sub) sub.buCount = this.state.businessUnits.filter(b => b.subsidiaryId === data.subsidiaryId && b.status !== 'Inactive').length;
+    const sub = this.state.subsidiaries.find(s => s.id === subsidiaryId);
+    if (sub) {
+      sub.buCount = this.state.businessUnits.filter(b => b.subsidiaryId === subsidiaryId && b.status !== 'Inactive').length;
+    }
+
+    const actor = (typeof auth !== 'undefined' && auth.getUserInfo) ? auth.getUserInfo().name : 'User';
+    this.addAuditLog(actor, "BUSINESS_UNIT_CREATED", `Created Business Unit "${newBU.name}" (${newBU.code}) for subsidiary ${sub ? sub.name : subsidiaryId}`);
+
     this.saveState();
     return newBU;
   }
@@ -1736,6 +1771,62 @@ class AppStore {
     return newProj;
   }
 
+  addBusinessUnit(data) {
+    if (!this.state.businessUnits) {
+      this.state.businessUnits = JSON.parse(JSON.stringify(DEFAULT_DATA.businessUnits || []));
+    }
+    const name = (data.name || '').trim();
+    if (!name) {
+      throw new Error("Business Unit Name is required.");
+    }
+    if (!data.subsidiaryId) {
+      throw new Error("Associated Subsidiary is required.");
+    }
+
+    const sub = this.getSubsidiaryById(data.subsidiaryId);
+    if (!sub) {
+      throw new Error(`Subsidiary with ID "${data.subsidiaryId}" does not exist.`);
+    }
+
+    // Duplicate check within the same subsidiary (case-insensitive)
+    const existing = this.getBusinessUnits(data.subsidiaryId).find(
+      b => b.name.trim().toLowerCase() === name.toLowerCase()
+    );
+    if (existing) {
+      throw new Error(`A Business Unit named "${name}" already exists under ${sub.shortName || sub.name}.`);
+    }
+
+    const newId = data.id || `bu-${Date.now().toString(36)}-${Math.floor(100 + Math.random() * 900)}`;
+    const code = (data.code || '').trim() || `BU-${Math.floor(100 + Math.random() * 900)}`;
+    const activities = (data.description || data.activities || '').trim() || 'General Operations & Infrastructure Scope';
+    const head = (data.head || '').trim() || 'Assigned Head';
+    const status = data.status || 'Active';
+
+    const newBU = {
+      id: newId,
+      subsidiaryId: data.subsidiaryId,
+      code: code,
+      name: name,
+      head: head,
+      activities: activities,
+      description: activities,
+      status: status,
+      projectCount: 0,
+      esgStatus: status === 'Active' ? 'Submitted' : 'Draft',
+      createdAt: new Date().toISOString()
+    };
+
+    this.state.businessUnits.push(newBU);
+
+    // Increment subsidiary buCount
+    sub.buCount = (sub.buCount || 0) + 1;
+
+    const user = (typeof auth !== 'undefined' && auth.getUserInfo()) ? auth.getUserInfo().name : "Sub-Company Admin";
+    this.addAuditLog(user, "BUSINESS_UNIT_ADDED", `Created Business Unit "${newBU.name}" (${newBU.code}) under subsidiary ${sub.shortName || sub.name}`);
+    this.saveState();
+    return newBU;
+  }
+
   // =========================================================================
   // GRANULAR BUSINESS ACTIVITIES & NIC CLASSIFICATION
   // =========================================================================
@@ -1836,6 +1927,209 @@ class AppStore {
     }
     this.saveState();
     return log;
+  }
+
+  // =========================================================================
+  // SNAP-TO-BRSR EVIDENCE & SUBMISSIONS SHARED STORAGE
+  // =========================================================================
+  getDefaultSnapEvidenceSvg(type, title, subtitle) {
+    const isElec = type === 'electricity';
+    const primaryColor = isElec ? '#065f46' : '#0b2545';
+    const accentColor = isElec ? '#34d399' : '#38bdf8';
+    const badgeColor = isElec ? '#fef3c7' : '#e0f2fe';
+    const badgeText = isElec ? '#92400e' : '#0369a1';
+    const badgeBorder = isElec ? '#d97706' : '#0284c7';
+
+    const svg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="640" height="420" viewBox="0 0 640 420">
+        <rect width="640" height="420" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+        <rect x="20" y="20" width="600" height="64" fill="${primaryColor}" rx="6"/>
+        <text x="40" y="60" fill="#ffffff" font-size="19" font-family="sans-serif" font-weight="bold">${title}</text>
+        <rect x="20" y="96" width="600" height="230" fill="#ffffff" stroke="#e2e8f0" stroke-width="1" rx="4"/>
+        <text x="40" y="130" fill="#475569" font-size="12" font-family="monospace">CERTIFIED PHYSICAL BILL / OPERATIONAL VOUCHER EVIDENCE</text>
+        <line x1="40" y1="145" x2="600" y2="145" stroke="#e2e8f0" stroke-width="1"/>
+        <text x="40" y="175" fill="#0f172a" font-size="14" font-family="sans-serif" font-weight="600">Disclosed Parameters &amp; Verification Audit Trail</text>
+        <text x="40" y="205" fill="#334155" font-size="13" font-family="sans-serif">${subtitle}</text>
+        <text x="40" y="235" fill="#64748b" font-size="12" font-family="sans-serif">Subsidiary: Olectra Greentech Limited | Business Unit: Electric Bus Manufacturing BU</text>
+        <text x="40" y="260" fill="#64748b" font-size="12" font-family="sans-serif">Project Site: Olectra EV Bus Giga-Hub, Phase 1 (MEIL-OL-03)</text>
+        <rect x="40" y="280" width="560" height="32" fill="${badgeColor}" rx="4" stroke="${badgeBorder}"/>
+        <text x="320" y="301" fill="${badgeText}" font-size="11" font-family="sans-serif" font-weight="bold" text-anchor="middle">OFFICIAL MEIL ESG STATUTORY AUDIT ATTACHMENT • RETAINED FOR SEBI CORE ASSURANCE</text>
+        <rect x="20" y="340" width="600" height="60" fill="#f1f5f9" rx="4"/>
+        <text x="40" y="375" fill="#0f172a" font-size="12" font-family="monospace">SEBI BRSR Principle 6 Core Verified • Digital Signature Valid</text>
+      </svg>
+    `;
+    return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+  }
+
+  getSnapEvidenceRecords(subsidiaryId = null) {
+    if (!this.state.snapEvidenceRecords || !Array.isArray(this.state.snapEvidenceRecords)) {
+      this.state.snapEvidenceRecords = [
+        {
+          id: 'EV-OLE-2026-001',
+          subsidiaryId: 'sub-3',
+          subsidiaryName: 'Olectra Greentech Limited',
+          businessUnitId: 'bu-301',
+          businessUnitName: 'Electric Bus Manufacturing BU',
+          businessUnitCode: 'BU-301',
+          projectId: 'prj-03',
+          projectName: 'Olectra EV Bus Giga-Hub, Phase 1',
+          projectCode: 'MEIL-OL-03',
+          documentName: 'IOCL_Commercial_Diesel_Invoice_Sep2026.pdf',
+          documentDate: '2026-09-15',
+          documentType: 'Diesel Bill',
+          customDocumentType: null,
+          fuelType: 'High-Speed Diesel',
+          quantity: 1200,
+          unit: 'Litres',
+          customUnit: null,
+          vendor: 'Indian Oil Corporation Ltd (Commercial Fuel Depot)',
+          totalCostInr: 111000,
+          scope: 'Scope 1 Direct',
+          brsrMapping: 'Principle 6 (P6-E1): Direct Fuel Combustion Disclosures',
+          calculatedEmissionsKg: 3216,
+          calculatedEmissionsMt: 3.22,
+          emissionFactorUsed: '2.68 kg CO2e / Litre (Sample SEBI Core Baseline)',
+          formula: '1,200 Litres × 2.68 kg CO2e/L = 3,216 kg (3.22 tCO2e)',
+          status: 'Submitted',
+          approvalStatus: 'Approved',
+          submissionTimestamp: '2026-09-18 14:20',
+          confidenceScore: 94.6,
+          isSimulatedExtraction: true,
+          reviewerNotes: 'Verified and approved with depot calibration.',
+          reviewerDate: '2026-09-19',
+          reviewerName: 'P. V. Krishna Reddy (Main Admin)',
+          imageDataUrl: this.getDefaultSnapEvidenceSvg('diesel', 'INDIAN OIL CORP - DIESEL TAX INVOICE', 'Quantity: 1,200 Litres @ ₹92.50/L • Total: ₹1,11,000')
+        },
+        {
+          id: 'EV-OLE-2026-002',
+          subsidiaryId: 'sub-3',
+          subsidiaryName: 'Olectra Greentech Limited',
+          businessUnitId: 'bu-301',
+          businessUnitName: 'Electric Bus Manufacturing BU',
+          businessUnitCode: 'BU-301',
+          projectId: 'prj-03',
+          projectName: 'Olectra EV Bus Giga-Hub, Phase 1',
+          projectCode: 'MEIL-OL-03',
+          documentName: 'TSSPDCL_HT_Power_Bill_August2026.pdf',
+          documentDate: '2026-08-31',
+          documentType: 'Electricity Bill',
+          customDocumentType: null,
+          fuelType: 'Grid Electricity',
+          quantity: 14500,
+          unit: 'kWh',
+          customUnit: null,
+          vendor: 'Telangana State Southern Power Distribution Co.',
+          totalCostInr: 121800,
+          scope: 'Scope 2 Indirect',
+          brsrMapping: 'Principle 6 (P6-E2): Purchased Grid Electricity Disclosures',
+          calculatedEmissionsKg: 10382,
+          calculatedEmissionsMt: 10.38,
+          emissionFactorUsed: '0.716 kg CO2e / kWh (Sample CEA Baseline v20)',
+          formula: '14,500 kWh × 0.716 kg CO2e/kWh = 10,382 kg (10.38 tCO2e)',
+          status: 'Submitted',
+          approvalStatus: 'Approved',
+          submissionTimestamp: '2026-09-10 11:45',
+          confidenceScore: 96.2,
+          isSimulatedExtraction: true,
+          reviewerNotes: 'Validated against DISCOM grid portal.',
+          reviewerDate: '2026-09-12',
+          reviewerName: 'P. V. Krishna Reddy (Main Admin)',
+          imageDataUrl: this.getDefaultSnapEvidenceSvg('electricity', 'TSSPDCL - HT ELECTRICITY SUPPLY BILL', 'Units Billed: 14,500 kWh • Energy & Demand: ₹1,21,800')
+        }
+      ];
+    } else {
+      // Ensure records with missing previews or BU mapping get backfilled gracefully
+      this.state.snapEvidenceRecords.forEach(r => {
+        if (!r.businessUnitId) {
+          r.businessUnitId = 'bu-301';
+          r.businessUnitName = 'Electric Bus Manufacturing BU';
+          r.businessUnitCode = 'BU-301';
+        }
+        if (!r.imageDataUrl) {
+          if (r.id === 'EV-OLE-2026-001') {
+            r.imageDataUrl = this.getDefaultSnapEvidenceSvg('diesel', 'INDIAN OIL CORP - DIESEL TAX INVOICE', 'Quantity: 1,200 Litres @ ₹92.50/L • Total: ₹1,11,000');
+          } else if (r.id === 'EV-OLE-2026-002') {
+            r.imageDataUrl = this.getDefaultSnapEvidenceSvg('electricity', 'TSSPDCL - HT ELECTRICITY SUPPLY BILL', 'Units Billed: 14,500 kWh • Energy & Demand: ₹1,21,800');
+          }
+        }
+      });
+    }
+
+    if (!subsidiaryId || subsidiaryId === 'all') {
+      return this.state.snapEvidenceRecords;
+    }
+    return this.state.snapEvidenceRecords.filter(r => r.subsidiaryId === subsidiaryId);
+  }
+
+  getSnapEvidenceById(id) {
+    const list = this.getSnapEvidenceRecords('all');
+    return list.find(r => r.id === id);
+  }
+
+  saveSnapEvidenceRecord(record) {
+    const list = this.getSnapEvidenceRecords('all');
+    const existingIndex = list.findIndex(r => r.id === record.id);
+    if (existingIndex >= 0) {
+      list[existingIndex] = { ...list[existingIndex], ...record };
+    } else {
+      list.unshift(record);
+    }
+
+    // Persist to IndexedDB if image is present for durable cross-session retrieval
+    if (record.imageDataUrl && typeof window !== 'undefined' && window.indexedDB) {
+      try {
+        const req = indexedDB.open('MEIL_ESG_EVIDENCE_STORE_V2', 1);
+        req.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains('evidence_blobs')) {
+            db.createObjectStore('evidence_blobs', { keyPath: 'id' });
+          }
+        };
+        req.onsuccess = (e) => {
+          const db = e.target.result;
+          const tx = db.transaction('evidence_blobs', 'readwrite');
+          tx.objectStore('evidence_blobs').put({
+            id: record.id,
+            imageDataUrl: record.imageDataUrl,
+            documentName: record.documentName,
+            updatedAt: Date.now()
+          });
+        };
+      } catch (err) {
+        console.warn('IndexedDB evidence cache warning:', err);
+      }
+    }
+
+    this.saveState();
+    return record;
+  }
+
+  updateSnapEvidenceReviewStatus(evidenceId, newStatus, reviewerNotes = null, reviewerName = "Main Company Admin") {
+    const record = this.getSnapEvidenceById(evidenceId);
+    if (!record) return false;
+
+    record.status = newStatus;
+    record.approvalStatus = newStatus;
+    record.reviewerNotes = reviewerNotes || "";
+    record.reviewerDate = new Date().toISOString().slice(0, 10);
+    record.reviewerName = reviewerName;
+
+    // Add Audit Log
+    this.addAuditLog(reviewerName, "SNAP_EVIDENCE_REVIEWED", `Reviewed Snap-to-BRSR evidence ${record.id} (${record.documentType}) for ${record.subsidiaryName}: status changed to ${newStatus}`);
+
+    // Add notification to subsidiary
+    this.addNotification({
+      role: 'sub_admin',
+      subsidiaryId: record.subsidiaryId,
+      type: 'review',
+      title: `Evidence ${record.id} ${newStatus}`,
+      desc: `${reviewerName} ${newStatus === 'Approved' ? 'approved' : (newStatus === 'Correction Required' ? 'requested corrections on' : 'rejected')} your evidence filing: "${record.documentName}".`,
+      icon: newStatus === 'Approved' ? 'CheckCircle2' : (newStatus === 'Correction Required' ? 'AlertTriangle' : 'XCircle'),
+      color: newStatus === 'Approved' ? 'success' : (newStatus === 'Correction Required' ? 'warning' : 'danger')
+    });
+
+    this.saveState();
+    return record;
   }
 }
 

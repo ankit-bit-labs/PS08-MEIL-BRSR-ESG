@@ -288,6 +288,62 @@ class WorkflowManager {
       ui.renderCurrentView();
     }
   }
+
+  // =========================================================================
+  // SNAP-TO-BRSR EVIDENCE WORKFLOW REVIEW LIFECYCLE
+  // Main Admin: Review Evidence -> Approve / Request Correction / Reject
+  // =========================================================================
+
+  openSnapEvidenceReviewModal(evidenceId) {
+    ui.showSnapEvidenceReviewModal(evidenceId);
+  }
+
+  approveSnapEvidence(evidenceId, notes = "Verified against uploaded document/bill evidence.") {
+    const user = auth.getUserInfo();
+    const reviewerName = user ? `${user.name} (${auth.isMainAdmin() ? 'Main Admin' : user.role})` : "Main Company Admin";
+    const record = store.updateSnapEvidenceReviewStatus(evidenceId, "Approved", notes, reviewerName);
+    if (record) {
+      ui.showToast(`Evidence ${evidenceId} APPROVED! Disclosures verified for ${record.subsidiaryName}.`, "success");
+      ui.closeModals();
+      ui.renderCurrentView();
+    } else {
+      ui.showToast(`Failed to update status for evidence ${evidenceId}.`, "danger");
+    }
+  }
+
+  requestSnapEvidenceCorrection(evidenceId, comment) {
+    if (!comment || comment.trim().length === 0) {
+      ui.showToast("Please provide specific reviewer comments for required evidence correction.", "warning");
+      return;
+    }
+    const user = auth.getUserInfo();
+    const reviewerName = user ? `${user.name} (${auth.isMainAdmin() ? 'Main Admin' : user.role})` : "Main Company Admin";
+    const record = store.updateSnapEvidenceReviewStatus(evidenceId, "Correction Required", comment, reviewerName);
+    if (record) {
+      ui.showToast(`Correction requested for evidence ${evidenceId}. Subsidiary notified with audit remarks.`, "warning");
+      ui.closeModals();
+      ui.renderCurrentView();
+    } else {
+      ui.showToast(`Failed to update status for evidence ${evidenceId}.`, "danger");
+    }
+  }
+
+  rejectSnapEvidence(evidenceId, reason) {
+    if (!reason || reason.trim().length === 0) {
+      ui.showToast("Please provide formal audit justification for rejecting this evidence filing.", "warning");
+      return;
+    }
+    const user = auth.getUserInfo();
+    const reviewerName = user ? `${user.name} (${auth.isMainAdmin() ? 'Main Admin' : user.role})` : "Main Company Admin";
+    const record = store.updateSnapEvidenceReviewStatus(evidenceId, "Rejected", reason, reviewerName);
+    if (record) {
+      ui.showToast(`Evidence ${evidenceId} REJECTED. Excluded from consolidated disclosures.`, "danger");
+      ui.closeModals();
+      ui.renderCurrentView();
+    } else {
+      ui.showToast(`Failed to update status for evidence ${evidenceId}.`, "danger");
+    }
+  }
 }
 
 // Global Singleton Workflow Instance

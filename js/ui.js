@@ -168,6 +168,11 @@ class UIManager {
           <i data-lucide="layout-dashboard"></i>
           <span>Dashboard</span>
         </a>
+        <a class="nav-item ${this.currentView === 'control_tower' ? 'active' : ''}" onclick="ui.navigateTo('control_tower')">
+          <i data-lucide="tower-control"></i>
+          <span>ESG Control Tower</span>
+          <span class="nav-badge" style="background:var(--meil-red); color:#fff;">New</span>
+        </a>
         <a class="nav-item ${this.currentView === 'company' ? 'active' : ''}" onclick="ui.navigateTo('company')">
           <i data-lucide="building-2"></i>
           <span>Company Management</span>
@@ -230,6 +235,11 @@ class UIManager {
         <a class="nav-item ${this.currentView === 'dashboard' ? 'active' : ''}" onclick="ui.navigateTo('dashboard')">
           <i data-lucide="layout-dashboard"></i>
           <span>Dashboard</span>
+        </a>
+        <a class="nav-item ${this.currentView === 'snap_to_brsr' ? 'active' : ''}" onclick="ui.navigateTo('snap_to_brsr')">
+          <i data-lucide="camera"></i>
+          <span>Snap-to-BRSR</span>
+          <span class="nav-badge" style="background:#059669; color:#fff;">New</span>
         </a>
         <a class="nav-item ${this.currentView === 'profile' ? 'active' : ''}" onclick="ui.navigateTo('profile')">
           <i data-lucide="building"></i>
@@ -355,9 +365,9 @@ class UIManager {
 
   navigateTo(view, subTab = null) {
     if (auth.isSubAdmin()) {
-      const allowedViews = ['dashboard', 'profile', 'activities', 'business_units', 'projects', 'sustainability', 'brsr', 'sdg', 'submissions', 'reports', 'notifications', 'settings'];
-      if (!allowedViews.includes(view)) {
-        this.showToast("Access Restricted: This section requires Main Company Admin privileges.", "warning");
+      const allowedViews = ['dashboard', 'snap_to_brsr', 'profile', 'activities', 'business_units', 'projects', 'sustainability', 'brsr', 'sdg', 'submissions', 'reports', 'notifications', 'settings'];
+      if (!allowedViews.includes(view) || view === 'control_tower') {
+        this.showToast("Access Restricted: ESG Control Tower requires Main Company Admin privileges.", "warning");
         this.currentView = 'dashboard';
         this.currentSubTab = null;
         this.renderSidebar();
@@ -365,6 +375,16 @@ class UIManager {
         this.renderCurrentView();
         return;
       }
+    }
+
+    if (auth.isMainAdmin() && view === 'snap_to_brsr') {
+      this.showToast("Access Notice: Snap-to-BRSR is designed specifically for Sub-Company Admins.", "info");
+      this.currentView = 'dashboard';
+      this.currentSubTab = null;
+      this.renderSidebar();
+      this.renderHeader();
+      this.renderCurrentView();
+      return;
     }
 
     this.currentView = view;
@@ -383,6 +403,8 @@ class UIManager {
   getViewTitle(view) {
     const map = {
       dashboard: 'Dashboard',
+      control_tower: 'ESG Control Tower',
+      snap_to_brsr: 'Snap-to-BRSR',
       company: 'Company Management',
       business_units: 'Business Unit ESG Center',
       projects: 'Project ESG Data Center',
@@ -422,6 +444,22 @@ class UIManager {
           this.postRenderDashboard();
         } else {
           this.postRenderSubDashboard();
+        }
+        break;
+
+      case 'control_tower':
+        if (auth.isMainAdmin() && typeof controlTowerModule !== 'undefined') {
+          controlTowerModule.render(viewport);
+        } else {
+          this.navigateTo('dashboard');
+        }
+        break;
+
+      case 'snap_to_brsr':
+        if (auth.isSubAdmin() && typeof snapToBrsrModule !== 'undefined') {
+          snapToBrsrModule.render(viewport);
+        } else {
+          this.navigateTo('dashboard');
         }
         break;
 
@@ -512,6 +550,9 @@ class UIManager {
           <p class="page-subtitle">Centralized oversight, subsidiary consolidation, statutory BRSR monitoring, and approval lifecycle</p>
         </div>
         <div class="page-actions">
+          <button class="btn btn-primary" onclick="ui.navigateTo('control_tower')">
+            <i data-lucide="tower-control"></i> ESG Control Tower
+          </button>
           <button class="btn btn-secondary" onclick="ui.navigateTo('reports')">
             <i data-lucide="file-bar-chart"></i> Generate Report
           </button>
@@ -828,6 +869,9 @@ class UIManager {
           <p class="page-subtitle">Assigned Subsidiary: <strong>${sub.shortName}</strong> | CIN: ${sub.cin} | Status: <strong>${metrics.submissionStatus}</strong></p>
         </div>
         <div class="page-actions">
+          <button class="btn btn-primary" onclick="ui.navigateTo('snap_to_brsr')">
+            <i data-lucide="camera"></i> Snap-to-BRSR
+          </button>
           <button class="btn btn-secondary" onclick="ui.navigateTo('reports')">
             <i data-lucide="file-text"></i> Own Reports
           </button>
@@ -1351,6 +1395,14 @@ class UIManager {
 
     if (tab === 'business_units') {
       return `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+          <div style="font-size:13px; color:var(--text-muted);">
+            Managing <strong>${bus.length}</strong> operational Business Units across Group subsidiary companies
+          </div>
+          <button class="btn btn-sm btn-primary" onclick="ui.showAddBusinessUnitModal()">
+            <i data-lucide="plus-circle"></i> Add Business Unit
+          </button>
+        </div>
         <div class="table-responsive">
           <table class="table">
             <thead>
@@ -1692,9 +1744,14 @@ class UIManager {
 
       <!-- Business Units List -->
       <div class="card" style="margin-bottom:20px;">
-        <div class="card-header">
+        <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
           <h3 class="card-title"><i data-lucide="briefcase"></i> Business Units under ${sub.shortName}</h3>
-          <span class="badge badge-draft">${bus.length} BUs</span>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button class="btn btn-sm btn-primary" onclick="ui.showAddBusinessUnitModal('${subId}')">
+              <i data-lucide="plus-circle"></i> Add Business Unit
+            </button>
+            <span class="badge badge-draft">${bus.length} BUs</span>
+          </div>
         </div>
         <div class="card-body" style="padding:0;">
           <div class="table-responsive">
@@ -2520,6 +2577,40 @@ class UIManager {
           </div>
         </div>
       </div>
+
+      <!-- Snap-to-BRSR Operational Document & Photo Evidence Pending Review -->
+      <div class="card" style="margin-top:24px;">
+        <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <h3 class="card-title"><i data-lucide="camera" style="color:var(--color-success)"></i> Snap-to-BRSR Operational Evidence Filings</h3>
+            <span style="font-size:12px; color:var(--text-muted);">Uploaded bills, meter photos, weighbridge slips &amp; custom operational documentation</span>
+          </div>
+          <span class="badge ${store.getSnapEvidenceRecords('all').filter(e => e.status === 'Submitted' || e.status === 'Pending Review').length > 0 ? 'badge-submitted' : 'badge-approved'}">
+            ${store.getSnapEvidenceRecords('all').filter(e => e.status === 'Submitted' || e.status === 'Pending Review').length} Pending Review
+          </span>
+        </div>
+        <div class="card-body" style="padding:0;">
+          <div class="table-responsive">
+            <table class="table" id="snap-admin-evidence-table">
+              <thead>
+                <tr>
+                  <th>Evidence ID</th>
+                  <th>Attached Photo / Preview</th>
+                  <th>Subsidiary &amp; Project</th>
+                  <th>Document Type &amp; Description</th>
+                  <th>Item / Vendor</th>
+                  <th>Quantity &amp; Emissions</th>
+                  <th>Review Status</th>
+                  <th>Audit Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${this.renderSnapEvidenceAdminRows()}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     `;
   }
 
@@ -2661,6 +2752,40 @@ class UIManager {
           </div>
         </div>
       </div>
+
+      <!-- Snap-to-BRSR Operational Evidence Filings for this Subsidiary -->
+      <div class="card" style="margin-top:20px;">
+        <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <h3 class="card-title"><i data-lucide="camera" style="color:var(--color-success)"></i> Snap-to-BRSR Uploaded Evidence Register</h3>
+            <span style="font-size:12px; color:var(--text-muted);">Uploaded operational bills, meter photos &amp; Central Admin review feedback</span>
+          </div>
+          <button class="btn btn-sm btn-outline" onclick="ui.navigateTo('snap-to-brsr')">
+            <i data-lucide="plus"></i> Upload New Evidence
+          </button>
+        </div>
+        <div class="card-body" style="padding:0;">
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Evidence ID</th>
+                  <th>Preview</th>
+                  <th>Document Type &amp; Description</th>
+                  <th>Project</th>
+                  <th>Quantity / Fuel</th>
+                  <th>Calculated Emissions</th>
+                  <th>Review Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${this.renderSnapEvidenceSubRows(subId)}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     `;
   }
 
@@ -2710,6 +2835,409 @@ class UIManager {
         row.style.display = 'none';
       }
     });
+  }
+
+  // =========================================================================
+  // SNAP-TO-BRSR EVIDENCE TABLE RENDERING (MAIN ADMIN & SUB ADMIN)
+  // =========================================================================
+  renderSnapEvidenceAdminRows() {
+    const records = store.getSnapEvidenceRecords('all');
+    if (!records || records.length === 0) {
+      return `<tr><td colspan="8" class="table-empty">No operational evidence records submitted yet.</td></tr>`;
+    }
+
+    return records.map(r => `
+      <tr data-status="${r.status}">
+        <td><strong style="color:var(--meil-navy); font-family:monospace;">${r.id}</strong></td>
+        <td>
+          <div style="cursor:pointer; display:inline-block;" onclick="ui.showSnapEvidenceReviewModal('${r.id}')" title="Click to view full photo & audit">
+            ${r.imageDataUrl ? `
+              <div style="width:48px; height:48px; border-radius:6px; overflow:hidden; border:1px solid #cbd5e1; background:#0f172a; display:flex; align-items:center; justify-content:center; position:relative; box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+                <img src="${r.imageDataUrl}" style="width:100%; height:100%; object-fit:cover;" alt="Thumbnail">
+                <span style="position:absolute; bottom:0; right:0; background:rgba(0,0,0,0.6); color:#fff; font-size:8px; padding:1px 3px; border-top-left-radius:3px;">
+                  <i data-lucide="zoom-in" style="width:8px; height:8px;"></i>
+                </span>
+              </div>
+            ` : `
+              <div style="width:48px; height:48px; border-radius:6px; background:#f1f5f9; border:1px dashed #cbd5e1; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#94a3b8; font-size:9px;">
+                <i data-lucide="file-text" style="width:18px; height:18px;"></i>
+                <span>Demo</span>
+              </div>
+            `}
+          </div>
+        </td>
+        <td>
+          <strong>${r.subsidiaryName}</strong>
+          ${r.businessUnitName ? `<div style="font-size:11px; color:var(--meil-navy); font-weight:600;"><i data-lucide="layers" style="width:11px; height:11px; vertical-align:middle;"></i> BU: ${r.businessUnitName}</div>` : ''}
+          <div style="font-size:11px; color:var(--text-muted);">${r.projectName} (${r.projectCode || 'SITE'})</div>
+        </td>
+        <td>
+          <span class="badge badge-secondary" style="font-size:11px;">${r.documentType}</span>
+          ${r.customDocumentType ? `
+            <div style="font-size:11px; font-weight:700; color:#92400e; margin-top:3px; background:#fef3c7; display:inline-block; padding:1px 6px; border-radius:4px;">
+              "${r.customDocumentType}"
+            </div>
+          ` : ''}
+          <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Doc: ${r.documentName}</div>
+        </td>
+        <td>
+          <strong>${r.fuelType}</strong>
+          <div style="font-size:11px; color:var(--text-muted);">${r.vendor || 'Authorized Supplier'}</div>
+        </td>
+        <td>
+          <strong style="font-size:12px;">${(r.quantity || 0).toLocaleString('en-IN')} ${r.unit === 'Other' && r.customUnit ? `${r.customUnit} (Other)` : r.unit}</strong>
+          <div style="font-size:11px; color:${r.calculatedEmissionsMt > 0 ? 'var(--color-success)' : 'var(--text-muted)'}; font-weight:600;">
+            ${r.calculatedEmissionsMt > 0 ? `${r.calculatedEmissionsMt} tCO2e` : 'Non-Combustion'}
+          </div>
+        </td>
+        <td>
+          <span class="badge ${r.status === 'Approved' ? 'badge-approved' : (r.status === 'Submitted' || r.status === 'Pending Review' ? 'badge-submitted' : (r.status === 'Correction Required' ? 'badge-correction-required' : (r.status === 'Rejected' ? 'badge-rejected' : 'badge-draft')))}">
+            ${r.status === 'Submitted' ? 'Pending Review' : r.status}
+          </span>
+          ${r.reviewerNotes ? `<div style="font-size:10px; color:#b91c1c; max-width:140px; margin-top:2px; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;" title="${r.reviewerNotes}">Notes: ${r.reviewerNotes}</div>` : ''}
+        </td>
+        <td>
+          <div class="table-actions">
+            <button class="btn btn-sm btn-outline" onclick="ui.showSnapEvidenceReviewModal('${r.id}')" title="Inspect Photo &amp; Audit Disclosures">
+              <i data-lucide="eye"></i> Audit
+            </button>
+            ${(r.status === 'Submitted' || r.status === 'Pending Review' || r.status === 'Resubmitted') ? `
+              <button class="btn btn-sm btn-success" onclick="workflow.approveSnapEvidence('${r.id}')" title="Approve Operational Evidence">
+                <i data-lucide="check"></i>
+              </button>
+              <button class="btn btn-sm btn-danger" onclick="ui.openSnapCorrectionModal('${r.id}')" title="Request Evidence Correction">
+                <i data-lucide="alert-circle"></i>
+              </button>
+            ` : ''}
+          </div>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  renderSnapEvidenceSubRows(subId) {
+    const records = store.getSnapEvidenceRecords(subId);
+    if (!records || records.length === 0) {
+      return `<tr><td colspan="8" class="table-empty">No operational evidence uploaded for this subsidiary yet. Click "Upload New Evidence" to begin.</td></tr>`;
+    }
+
+    return records.map(r => `
+      <tr>
+        <td><strong style="color:var(--meil-navy); font-family:monospace;">${r.id}</strong></td>
+        <td>
+          <div style="cursor:pointer; display:inline-block;" onclick="snapToBrsrModule.viewEvidenceAudit('${r.id}')" title="View attached document">
+            ${r.imageDataUrl ? `
+              <div style="width:40px; height:40px; border-radius:4px; overflow:hidden; border:1px solid #cbd5e1; background:#0f172a;">
+                <img src="${r.imageDataUrl}" style="width:100%; height:100%; object-fit:cover;" alt="Evidence">
+              </div>
+            ` : `
+              <div style="width:40px; height:40px; border-radius:4px; background:#f1f5f9; display:flex; align-items:center; justify-content:center; color:#94a3b8; font-size:8px;">
+                <i data-lucide="file" style="width:16px; height:16px;"></i>
+              </div>
+            `}
+          </div>
+        </td>
+        <td>
+          <span class="badge badge-secondary" style="font-size:10px;">${r.documentType}</span>
+          ${r.customDocumentType ? `<div style="font-size:11px; font-weight:700; color:#92400e; margin-top:2px;">"${r.customDocumentType}"</div>` : ''}
+          <div style="font-size:10px; color:var(--text-muted);">${r.documentName}</div>
+        </td>
+        <td>
+          <strong>${r.projectName}</strong>
+          ${r.businessUnitName ? `<div style="font-size:10px; color:var(--meil-navy); font-weight:600;">BU: ${r.businessUnitName}</div>` : ''}
+          <div style="font-size:10px; color:var(--text-muted);">${r.projectCode}</div>
+        </td>
+        <td>
+          <strong>${(r.quantity || 0).toLocaleString()} ${r.unit === 'Other' && r.customUnit ? `${r.customUnit} (Other)` : r.unit}</strong>
+          <div style="font-size:10px; color:var(--text-muted);">${r.fuelType}</div>
+        </td>
+        <td>
+          <strong style="color:${r.calculatedEmissionsMt > 0 ? 'var(--color-success)' : 'var(--text-muted)'}; font-size:12px;">
+            ${r.calculatedEmissionsMt > 0 ? `${r.calculatedEmissionsMt} tCO2e` : 'Non-Combustion'}
+          </strong>
+        </td>
+        <td>
+          <span class="badge ${r.status === 'Approved' ? 'badge-approved' : (r.status === 'Submitted' || r.status === 'Pending Review' ? 'badge-submitted' : (r.status === 'Correction Required' ? 'badge-correction-required' : (r.status === 'Rejected' ? 'badge-rejected' : 'badge-draft')))}">
+            ${r.status === 'Submitted' ? 'Under Review' : r.status}
+          </span>
+          ${r.reviewerNotes ? `<div style="font-size:11px; color:#b91c1c; margin-top:3px; font-weight:600;">Remarks: "${r.reviewerNotes}"</div>` : ''}
+        </td>
+        <td>
+          <div style="display:flex; gap:6px;">
+            <button class="btn btn-sm btn-outline" onclick="snapToBrsrModule.viewEvidenceAudit('${r.id}')" title="Audit Disclosures">
+              <i data-lucide="eye"></i> Audit
+            </button>
+            ${(r.status === 'Correction Required' || r.status === 'Draft') ? `
+              <button class="btn btn-sm btn-warning" onclick="snapToBrsrModule.editRecord('${r.id}')" title="Edit / Re-upload Evidence">
+                <i data-lucide="edit-3"></i> Edit
+              </button>
+            ` : ''}
+          </div>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  // =========================================================================
+  // MAIN ADMIN REVIEW MODAL FOR SNAP-TO-BRSR EVIDENCE
+  // Full photo visibility, metadata inspection, calculation formulas & Review actions
+  // =========================================================================
+  showSnapEvidenceReviewModal(evidenceId) {
+    const record = store.getSnapEvidenceById(evidenceId);
+    if (!record) return;
+
+    const modalBackdrop = document.getElementById('modal-backdrop');
+    const modalContent = document.getElementById('modal-dialog-content');
+    if (!modalBackdrop || !modalContent) return;
+
+    const isMain = auth.isMainAdmin();
+
+    modalContent.innerHTML = `
+      <div class="modal-dialog modal-xl" style="max-width:960px;">
+        <div class="modal-header">
+          <div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <h2 class="modal-title" style="margin:0;">
+                <i data-lucide="file-check-2" style="color:var(--color-success);"></i>
+                Audit &amp; Review Operational Evidence: ${record.id}
+              </h2>
+              <span class="badge ${record.status === 'Approved' ? 'badge-approved' : (record.status === 'Submitted' || record.status === 'Pending Review' ? 'badge-submitted' : (record.status === 'Correction Required' ? 'badge-correction-required' : 'badge-rejected'))}">
+                ${record.status === 'Submitted' ? 'Pending Review' : record.status}
+              </span>
+            </div>
+            <p style="font-size:12px; color:var(--text-muted); margin:4px 0 0 0;">
+              Entity: <strong>${record.subsidiaryName}</strong> | BU: <strong>${record.businessUnitName || 'Assigned BU'}${record.businessUnitCode ? ` (${record.businessUnitCode})` : ''}</strong> | Project: <strong>${record.projectName} (${record.projectCode})</strong> | Submitted: <strong>${record.submissionTimestamp}</strong>
+            </p>
+          </div>
+          <button class="modal-close-btn" onclick="ui.closeModals()"><i data-lucide="x"></i></button>
+        </div>
+
+        <div class="modal-body">
+          ${record.reviewerNotes ? `
+            <div class="correction-card" style="margin-bottom:16px;">
+              <div class="correction-badge-title"><i data-lucide="message-square"></i> Reviewer Remarks:</div>
+              <div class="correction-comment">${record.reviewerNotes} (by ${record.reviewerName || 'Main Admin'}, ${record.reviewerDate})</div>
+            </div>
+          ` : ''}
+
+          <!-- 2-Column Layout: Visual Evidence on Left, Extracted Fields & Review Actions on Right -->
+          <div class="grid-2-col" style="display:grid; grid-template-columns: 1.1fr 1fr; gap:20px; align-items:start;">
+            <!-- Column 1: High-Resolution Photo/Bill Display -->
+            <div class="card" style="background:#0f172a; border-color:#334155; color:#fff; overflow:hidden;">
+              <div class="card-header" style="background:rgba(255,255,255,0.05); border-bottom:1px solid #334155; display:flex; justify-content:space-between; align-items:center;">
+                <h4 class="card-title" style="color:#f8fafc; font-size:13px; display:flex; align-items:center; gap:6px;">
+                  <i data-lucide="image" style="color:#38bdf8;"></i> Uploaded Physical Bill / Meter Evidence
+                </h4>
+                ${record.imageDataUrl ? `
+                  <div style="display:flex; gap:6px;">
+                    <a href="${record.imageDataUrl}" target="_blank" class="btn btn-sm btn-outline" style="color:#38bdf8; border-color:#0284c7; padding:2px 8px; font-size:11px;" title="Open full resolution in new tab">
+                      <i data-lucide="external-link"></i> Full Resolution
+                    </a>
+                    <a href="${record.imageDataUrl}" download="${record.documentName}" class="btn btn-sm btn-outline" style="color:#38bdf8; border-color:#0284c7; padding:2px 8px; font-size:11px;" title="Download original file">
+                      <i data-lucide="download"></i> Download
+                    </a>
+                  </div>
+                ` : ''}
+              </div>
+              <div class="card-body" style="padding:14px; text-align:center;">
+                ${record.imageDataUrl ? `
+                  <div style="background:#020617; border-radius:8px; padding:10px; border:1px solid #1e293b; max-height:480px; overflow:auto; display:flex; align-items:center; justify-content:center;">
+                    <img src="${record.imageDataUrl}" style="max-width:100%; max-height:450px; object-fit:contain; border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,0.5);" alt="Uploaded Evidence Document">
+                  </div>
+                  <div style="margin-top:10px; font-size:11px; color:#94a3b8; display:flex; justify-content:space-between;">
+                    <span>File: <strong>${record.documentName}</strong></span>
+                    <span>Date: <strong>${record.documentDate}</strong></span>
+                  </div>
+                ` : `
+                  <div style="padding:32px 18px; background:rgba(239,68,68,0.08); border:1px dashed #ef4444; border-radius:8px; color:#f8fafc; text-align:center;">
+                    <i data-lucide="alert-octagon" style="width:44px; height:44px; margin-bottom:10px; color:#f87171;"></i>
+                    <h5 style="margin:0 0 6px 0; font-size:14px; color:#fca5a5;">Evidence File Inaccessible or Missing</h5>
+                    <p style="font-size:12px; margin:0 0 8px 0; color:#cbd5e1; line-height:1.5;">The original photograph or supporting document could not be retrieved from local storage or cache.</p>
+                    <span style="font-size:11px; background:rgba(239,68,68,0.25); color:#fecaca; padding:3px 10px; border-radius:4px; display:inline-block;">
+                      Please click "Request Correction" below to prompt the Sub-Company Admin to re-upload.
+                    </span>
+                  </div>
+                `}
+              </div>
+            </div>
+
+            <!-- Column 2: Audit Disclosures, Verification & BRSR Principle Mapping -->
+            <div>
+              <div class="card" style="margin-bottom:16px;">
+                <div class="card-header">
+                  <h4 class="card-title" style="font-size:13px;"><i data-lucide="clipboard-check"></i> Disclosed Operational Parameters</h4>
+                </div>
+                <div class="card-body" style="padding:0;">
+                  <table class="table" style="font-size:12px;">
+                    <tbody>
+                      <tr>
+                        <td style="width:40%; color:var(--text-muted);">Business Unit</td>
+                        <td>
+                          <strong>${record.businessUnitName || 'Central Operations BU'}</strong>
+                          ${record.businessUnitCode ? `<span style="font-size:11px; color:var(--text-muted);"> (${record.businessUnitCode})</span>` : ''}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="color:var(--text-muted);">Document Type</td>
+                        <td>
+                          <strong>${record.documentType}</strong>
+                          ${record.customDocumentType ? `
+                            <div style="margin-top:4px; font-size:11px; background:#fef3c7; color:#92400e; padding:2px 8px; border-radius:4px; font-weight:700;">
+                              Specified Description: "${record.customDocumentType}"
+                            </div>
+                          ` : ''}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="color:var(--text-muted);">Vendor / Issuer</td>
+                        <td><strong>${record.vendor || 'Authorized Supplier'}</strong></td>
+                      </tr>
+                      <tr>
+                        <td style="color:var(--text-muted);">Item / Energy Commodity</td>
+                        <td><strong>${record.fuelType}</strong></td>
+                      </tr>
+                      <tr>
+                        <td style="color:var(--text-muted);">Unit of Measurement</td>
+                        <td>
+                          <strong>${record.unit}</strong>
+                          ${record.unit === 'Other' && record.customUnit ? `
+                            <div style="margin-top:4px; font-size:11px; background:#e0f2fe; color:#0369a1; padding:2px 8px; border-radius:4px; font-weight:700;">
+                              Specified Custom Unit: "${record.customUnit}" (Standard GHG conversion uncalibrated)
+                            </div>
+                          ` : ''}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="color:var(--text-muted);">Logged Quantity</td>
+                        <td><strong style="font-size:14px; color:var(--meil-navy);">${(record.quantity || 0).toLocaleString()} ${record.unit === 'Other' && record.customUnit ? record.customUnit : record.unit}</strong></td>
+                      </tr>
+                      <tr>
+                        <td style="color:var(--text-muted);">BRSR Principle Mapping</td>
+                        <td><span class="badge badge-secondary" style="font-size:10px;">${record.brsrMapping || 'General Operational'}</span></td>
+                      </tr>
+                      <tr>
+                        <td style="color:var(--text-muted);">GHG Scope Allocation</td>
+                        <td><span class="badge ${record.scope?.includes('Scope 1') ? 'badge-primary' : (record.scope?.includes('Scope 2') ? 'badge-secondary' : 'badge-outline')}">${record.scope}</span></td>
+                      </tr>
+                      <tr>
+                        <td style="color:var(--text-muted);">Emission Factor Applied</td>
+                        <td><code>${record.emissionFactorUsed || 'N/A'}</code></td>
+                      </tr>
+                      <tr>
+                        <td style="color:var(--text-muted);">Calculation Formula</td>
+                        <td><div style="font-family:monospace; font-size:11px; background:#f8fafc; padding:4px 6px; border-radius:4px; border:1px solid #e2e8f0;">${record.formula || 'N/A'}</div></td>
+                      </tr>
+                      <tr>
+                        <td style="color:var(--text-muted);">Calculated Carbon Footprint</td>
+                        <td>
+                          <strong style="font-size:15px; color:${record.calculatedEmissionsMt > 0 ? 'var(--color-success)' : 'var(--text-muted)'};">
+                            ${record.calculatedEmissionsMt > 0 ? `${record.calculatedEmissionsMt} tCO2e (${record.calculatedEmissionsKg?.toLocaleString()} kg)` : '0.00 tCO2e (Non-Combustion Record)'}
+                          </strong>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Review Decision Controls (Main Admin Only) -->
+              ${isMain ? `
+                <div class="card" style="border-top:3px solid var(--meil-navy);">
+                  <div class="card-header">
+                    <h4 class="card-title" style="font-size:13px;"><i data-lucide="shield-check"></i> Central Audit &amp; Verification Action</h4>
+                  </div>
+                  <div class="card-body">
+                    <div class="form-group" style="margin-bottom:12px;">
+                      <label class="form-label" style="font-size:12px;">Reviewer Notes / Verification Remarks</label>
+                      <textarea id="snap-review-notes-input" class="form-control" rows="2" placeholder="e.g., Verified against physical DISCOM meter seal and calibrated rate slip."></textarea>
+                    </div>
+                    <div style="display:flex; gap:8px; justify-content:flex-end;">
+                      <button class="btn btn-danger btn-sm" onclick="ui.executeSnapRejection('${record.id}')">
+                        <i data-lucide="x-circle"></i> Reject
+                      </button>
+                      <button class="btn btn-outline btn-sm" style="color:#d97706; border-color:#f59e0b;" onclick="ui.executeSnapCorrection('${record.id}')">
+                        <i data-lucide="alert-triangle"></i> Request Correction
+                      </button>
+                      <button class="btn btn-success btn-sm" onclick="ui.executeSnapApproval('${record.id}')">
+                        <i data-lucide="check-circle-2"></i> Approve &amp; Consolidate
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="ui.closeModals()">Close</button>
+        </div>
+      </div>
+    `;
+
+    modalBackdrop.classList.add('open');
+    this.refreshIcons();
+  }
+
+  openSnapCorrectionModal(evidenceId) {
+    const record = store.getSnapEvidenceById(evidenceId);
+    if (!record) return;
+
+    const modalBackdrop = document.getElementById('modal-backdrop');
+    const modalContent = document.getElementById('modal-dialog-content');
+    if (!modalBackdrop || !modalContent) return;
+
+    modalContent.innerHTML = `
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <h2 class="modal-title" style="color:var(--meil-red);">
+            <i data-lucide="alert-triangle"></i> Request Correction: Evidence ${record.id}
+          </h2>
+          <button class="modal-close-btn" onclick="ui.closeModals()"><i data-lucide="x"></i></button>
+        </div>
+        <div class="modal-body">
+          <p style="font-size:13px; color:var(--text-secondary); margin-bottom:14px;">
+            Specify the required correction for <strong>${record.subsidiaryName}</strong> regarding document <em>${record.documentName}</em>.
+          </p>
+          <div class="form-group">
+            <label class="form-label">Reviewer Comments / Required Action <span class="required">*</span></label>
+            <textarea id="snap-correction-comment-input" class="form-control" rows="3" placeholder="e.g., Unclear meter photo reading; please upload higher-resolution bill showing vendor GSTIN and date."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="ui.closeModals()">Cancel</button>
+          <button class="btn btn-danger" onclick="workflow.requestSnapEvidenceCorrection('${record.id}', document.getElementById('snap-correction-comment-input').value)">
+            <i data-lucide="send"></i> Dispatch Correction Request
+          </button>
+        </div>
+      </div>
+    `;
+
+    modalBackdrop.classList.add('open');
+    this.refreshIcons();
+  }
+
+  executeSnapApproval(evidenceId) {
+    const notes = document.getElementById('snap-review-notes-input')?.value || "Verified against uploaded evidence.";
+    workflow.approveSnapEvidence(evidenceId, notes);
+  }
+
+  executeSnapCorrection(evidenceId) {
+    const notes = document.getElementById('snap-review-notes-input')?.value;
+    if (!notes || notes.trim().length === 0) {
+      ui.showToast("Please enter specific reviewer notes describing the correction needed.", "warning");
+      return;
+    }
+    workflow.requestSnapEvidenceCorrection(evidenceId, notes);
+  }
+
+  executeSnapRejection(evidenceId) {
+    const notes = document.getElementById('snap-review-notes-input')?.value;
+    if (!notes || notes.trim().length === 0) {
+      ui.showToast("Please enter formal audit justification for rejecting this evidence.", "warning");
+      return;
+    }
+    workflow.rejectSnapEvidence(evidenceId, notes);
   }
 
   // =========================================================================
@@ -6616,6 +7144,9 @@ class UIManager {
           <button class="btn btn-outline" onclick="reportEngine.exportReportToExcel('Business Unit ESG Performance Report', '${this.activeYearFilter}')" title="Export BU Report">
             <i data-lucide="file-spreadsheet"></i> Export BU Report (.xls)
           </button>
+          <button class="btn btn-primary" onclick="ui.showAddBusinessUnitModal()" title="Add Business Unit">
+            <i data-lucide="plus-circle"></i> Add Business Unit
+          </button>
           <button class="btn btn-brand-red" onclick="ui.navigateTo('projects')">
             <i data-lucide="hard-hat"></i> Inspect Project Nodes
           </button>
@@ -6878,6 +7409,193 @@ class UIManager {
     this.closeModals();
     this.showToast(`Project node "${name}" created successfully.`, "success");
     this.renderCurrentView();
+  }
+
+  // =========================================================================
+  // BUSINESS UNIT MODAL CREATION (SUB-COMPANY ADMIN & MAIN ADMIN)
+  // =========================================================================
+  showAddBusinessUnitModal(subsidiaryId = null) {
+    const modalBackdrop = document.getElementById('modal-backdrop');
+    const modalContent = document.getElementById('modal-dialog-content');
+    if (!modalBackdrop || !modalContent) return;
+
+    const isSub = auth.isSubAdmin();
+    const subs = store.getSubsidiaries();
+    const activeSubId = isSub ? auth.getActiveSubsidiaryId() : (subsidiaryId || this.activeSubsidiaryFilter !== 'all' ? this.activeSubsidiaryFilter : 'sub-1');
+    const targetSub = store.getSubsidiaryById(activeSubId);
+
+    modalContent.innerHTML = `
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <h2 class="modal-title">
+            <i data-lucide="layers" style="color:var(--meil-navy);"></i> Create Business Unit
+          </h2>
+          <button class="modal-close-btn" onclick="ui.closeModals()"><i data-lucide="x"></i></button>
+        </div>
+        <div class="modal-body">
+          <p style="font-size:12px; color:var(--text-muted); margin-bottom:14px;">
+            Establish an operational Business Unit for statutory reporting, ESG tracking, bottom-up project consolidation, and Snap-to-BRSR attribution.
+          </p>
+
+          <div id="bu-modal-error-box" class="alert alert-danger" style="display:none; margin-bottom:14px; font-size:12px; padding:8px 12px;"></div>
+
+          <form id="form-create-bu" onsubmit="event.preventDefault(); ui.createBusinessUnit();">
+            <!-- Associated Subsidiary (Locked for Sub-Admin) -->
+            <div class="form-group" style="margin-bottom:14px;">
+              <label class="form-label" style="font-weight:600;">Associated Subsidiary <span class="required">*</span></label>
+              ${isSub ? `
+                <input type="text" class="form-control" value="${targetSub?.name || 'Assigned Subsidiary'} (${targetSub?.shortName || activeSubId})" disabled style="background:#f1f5f9; cursor:not-allowed; font-weight:600; color:var(--text-primary);">
+                <input type="hidden" id="bu-modal-sub" value="${activeSubId}">
+                <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">
+                  <i data-lucide="lock" style="width:11px; height:11px; vertical-align:middle;"></i> Locked to your authorized subsidiary workspace.
+                </div>
+              ` : `
+                <select id="bu-modal-sub" class="form-control" required>
+                  ${subs.map(s => `<option value="${s.id}" ${s.id === activeSubId ? 'selected' : ''}>${s.name} (${s.shortName})</option>`).join('')}
+                </select>
+                <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">Central Oversight: Select target subsidiary entity.</div>
+              `}
+            </div>
+
+            <!-- Business Unit Name (Required) -->
+            <div class="form-group" style="margin-bottom:14px;">
+              <label class="form-label" style="font-weight:600;">Business Unit Name <span class="required">*</span></label>
+              <input type="text" id="bu-modal-name" class="form-control" placeholder="E.g. Clean Energy Solutions BU" required autocomplete="off">
+            </div>
+
+            <!-- Business Unit Code (Optional) -->
+            <div class="form-group" style="margin-bottom:14px;">
+              <label class="form-label">Business Unit Code <span style="font-size:11px; color:var(--text-muted);">(Optional)</span></label>
+              <input type="text" id="bu-modal-code" class="form-control" placeholder="E.g. BU-303 (Auto-generated if empty)">
+            </div>
+
+            <!-- Operational Scope / Description (Optional) -->
+            <div class="form-group" style="margin-bottom:14px;">
+              <label class="form-label">Description / Operational Scope <span style="font-size:11px; color:var(--text-muted);">(Optional)</span></label>
+              <textarea id="bu-modal-desc" class="form-control" rows="2" placeholder="E.g. Engineering, procurement, construction of battery storage facilities and solar grid installations."></textarea>
+            </div>
+
+            <!-- Unit Head (Optional) -->
+            <div class="form-group" style="margin-bottom:14px;">
+              <label class="form-label">Unit Head / Officer Incharge <span style="font-size:11px; color:var(--text-muted);">(Optional)</span></label>
+              <input type="text" id="bu-modal-head" class="form-control" placeholder="E.g. Dr. Rajesh Sharma">
+            </div>
+
+            <!-- Status -->
+            <div class="form-group" style="margin-bottom:16px;">
+              <label class="form-label" style="font-weight:600;">Operational Status</label>
+              <select id="bu-modal-status" class="form-control">
+                <option value="Active" selected>Active — Operational &amp; Reporting</option>
+                <option value="Draft">Draft — In Preparation</option>
+                <option value="Planning">Planning — Scheduled for Future Execution</option>
+              </select>
+            </div>
+
+            <div class="modal-footer" style="padding:12px 0 0 0; display:flex; justify-content:flex-end; gap:8px;">
+              <button type="button" class="btn btn-secondary" onclick="ui.closeModals()">Cancel</button>
+              <button type="submit" class="btn btn-primary">
+                <i data-lucide="check"></i> Create Business Unit
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    `;
+
+    modalBackdrop.classList.add('open');
+    this.refreshIcons();
+    setTimeout(() => {
+      document.getElementById('bu-modal-name')?.focus();
+    }, 100);
+  }
+
+  createBusinessUnit() {
+    const errorBox = document.getElementById('bu-modal-error-box');
+    if (errorBox) {
+      errorBox.style.display = 'none';
+      errorBox.innerHTML = '';
+    }
+
+    const nameInput = document.getElementById('bu-modal-name');
+    const codeInput = document.getElementById('bu-modal-code');
+    const subInput = document.getElementById('bu-modal-sub');
+    const descInput = document.getElementById('bu-modal-desc');
+    const headInput = document.getElementById('bu-modal-head');
+    const statusInput = document.getElementById('bu-modal-status');
+
+    const name = nameInput?.value?.trim();
+    const code = codeInput?.value?.trim();
+    let subsidiaryId = subInput?.value;
+
+    // Strict security check: Sub-Company Admin can only create BUs in their own assigned subsidiary
+    if (auth.isSubAdmin()) {
+      subsidiaryId = auth.getActiveSubsidiaryId();
+    }
+
+    if (!name) {
+      if (errorBox) {
+        errorBox.innerHTML = '<i data-lucide="alert-circle" style="width:14px; height:14px; vertical-align:middle; margin-right:4px;"></i> Business Unit Name is required.';
+        errorBox.style.display = 'block';
+        this.refreshIcons();
+      } else {
+        this.showToast("Business Unit Name is required.", "warning");
+      }
+      nameInput?.focus();
+      return;
+    }
+
+    if (!subsidiaryId) {
+      if (errorBox) {
+        errorBox.innerHTML = '<i data-lucide="alert-circle" style="width:14px; height:14px; vertical-align:middle; margin-right:4px;"></i> Associated Subsidiary is required.';
+        errorBox.style.display = 'block';
+        this.refreshIcons();
+      }
+      return;
+    }
+
+    try {
+      const newBu = store.addBusinessUnit({
+        name,
+        code,
+        subsidiaryId,
+        description: descInput?.value?.trim() || '',
+        head: headInput?.value?.trim() || '',
+        status: statusInput?.value || 'Active'
+      });
+
+      this.closeModals();
+      this.showToast(`Business Unit "${newBu.name}" (${newBu.code}) created successfully.`, "success");
+
+      // Dynamic update: if Snap-to-BRSR BU dropdown exists, refresh and auto-select
+      const snapBuSelect = document.getElementById('snap-bu-select');
+      if (snapBuSelect && typeof snapToBrsrModule !== 'undefined') {
+        const activeSub = auth.getActiveSubsidiaryId();
+        const bus = store.getBusinessUnits(activeSub);
+        snapBuSelect.innerHTML = bus.map(b => `
+          <option value="${b.id}" ${b.id === newBu.id ? 'selected' : ''}>
+            ${b.name} (${b.code || b.id})
+          </option>
+        `).join('');
+        snapToBrsrModule.selectedBuId = newBu.id;
+        snapToBrsrModule.onBusinessUnitChanged(newBu.id);
+      }
+
+      // If project modal BU dropdown exists, refresh it
+      const projBuSelect = document.getElementById('proj-bu');
+      if (projBuSelect) {
+        this.updateBUMenu(subsidiaryId);
+      }
+
+      this.renderCurrentView();
+    } catch (err) {
+      if (errorBox) {
+        errorBox.innerHTML = `<i data-lucide="alert-triangle" style="width:14px; height:14px; vertical-align:middle; margin-right:4px;"></i> ${err.message || 'Error creating Business Unit.'}`;
+        errorBox.style.display = 'block';
+        this.refreshIcons();
+      } else {
+        this.showToast(err.message, "danger");
+      }
+    }
   }
 }
 

@@ -3,7 +3,7 @@
  * Provides offline caching for the application shell.
  */
 
-const CACHE_NAME = 'ps8-esg-v1';
+const CACHE_NAME = 'ps8-esg-v2';
 const SHELL_ASSETS = [
   './',
   './index.html',
@@ -20,6 +20,8 @@ const SHELL_ASSETS = [
   './js/charts.js',
   './js/workflow.js',
   './js/reports.js',
+  './js/controlTower.js',
+  './js/snapToBrsr.js',
   './js/ui.js',
   './js/app.js',
   './assets/meil-logo.png',
